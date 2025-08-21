@@ -1,0 +1,81 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SHELLTEST_DIR=$(realpath $(dirname $0))
+TESTS_DIR=$(realpath $(dirname "${BASH_SOURCE[0]}"))
+
+# Source logger
+source "$SHELLTEST_DIR/logger.sh"
+
+# Run a single test function
+run_test() {
+  local test_file="$1"
+  local test_name="$2"
+
+  local test_dir=$(mktemp -d -t shelltest.XXXXXX)
+
+  log_test_started "$test_file" "$test_name"
+
+  cat >$test_dir/test.sh <<EOTEST
+declare -ix ASSERTIONS_FAILED=0
+failed() {
+  _=\$((ASSERTIONS_FAILED++))
+  # echo "FAILED called \$ASSERTIONS_FAILED"
+}
+
+declare -ix ASSERTIONS_PASSED=0
+passed() {
+  _=\$((ASSERTIONS_PASSED++))
+  # echo "PASSED called \$ASSERTIONS_PASSED"
+}
+
+# Setup assertions
+source "$SHELLTEST_DIR/assertions.sh"
+
+source "$TESTS_DIR/$test_file"
+
+# Run setup if defined
+if declare -f setup >/dev/null; then
+  setup
+fi
+
+set -e
+$test_name >"$test_dir/stdout" 2>"$test_dir/stderr"
+set +e
+
+  # Run teardown if defined
+if declare -f teardown >/dev/null; then
+  teardown
+fi
+
+exit \$ASSERTIONS_FAILED
+EOTEST
+
+  if bash "$test_dir/test.sh"; then
+    log_test_passed "$test_file" "$test_name"
+    return 0
+  else
+    # echo -e "${RED}✗${RESET}"
+    log_test_failed "$test_file" "$test_name"
+    cat "$test_dir/stderr"
+    return 1
+  fi
+}
+
+get_all_tests() {
+  local test_file=$1
+  grep -oP '(^test_\w+)\s?' "$test_file"
+}
+
+run_test_file() {
+  local test_file=$1
+  results=$(get_all_tests "$test_file")
+
+  while IFS= read -r line; do
+    run_test "$test_file" "$line"
+  done <<<"$results"
+}
+
+# run_test "$@"
+run_test_file "$@"
