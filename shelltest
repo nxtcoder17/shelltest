@@ -77,5 +77,4 @@ run_test_file() {
   done <<<"$results"
 }
 
-# run_test "$@"
 run_test_file "$@"

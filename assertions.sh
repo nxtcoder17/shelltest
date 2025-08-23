@@ -191,3 +191,63 @@ assert_failure() {
   passed
   return 0
 }
+
+## File and Directory Assertions
+assert_path_exists() {
+  local path="$1"
+  local message="${2:-}"
+
+  if ! stat "$path" >/dev/null; then
+    failed
+    log_error "Assertion failed${message:+: $message} - Path does not exist: $path"
+    return 1
+  fi
+
+  passed
+  return 0
+}
+
+assert_path_not_exists() {
+  local path="$1"
+  local message="${2:-}"
+
+  if stat "$path" >/dev/null; then
+    failed
+    log_error "Assertion failed${message:+: $message} - Path exists: $path"
+    return 1
+  fi
+
+  passed
+  return 0
+}
+
+# Pattern matching assertion
+assert_matches() {
+  local string="$1"
+  local pattern="$2"
+  local message="${3:-}"
+
+  if ! [[ "$string" =~ $pattern ]]; then
+    failed
+    log_error "Assertion failed${message:+: $message} - String '$string' does not match pattern '$pattern'"
+    return 1
+  fi
+
+  passed
+  return 0
+}
+
+assert_not_matches() {
+  local string="$1"
+  local pattern="$2"
+  local message="${3:-}"
+
+  if [[ "$string" =~ $pattern ]]; then
+    failed
+    log_error "Assertion failed${message:+: $message} - String '$string' should not match pattern '$pattern'"
+    return 1
+  fi
+
+  passed
+  return 0
+}

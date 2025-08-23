@@ -32,10 +32,15 @@ test_boolean_conditions() {
   assert_false "[ $x -lt 3 ]"
 }
 
-test_command_success_failure() {
+test_command_exit_code() {
   assert_success "true"
   assert_failure "false"
 
   assert_success "echo 'hello' > /dev/null"
   assert_failure "cat /nonexistent/file"
+}
+
+test_match() {
+  assert_matches "Hello World" "Hello"
+  assert_not_matches "Hello World" "Hello$RANDOM"
 }
