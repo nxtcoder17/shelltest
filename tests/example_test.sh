@@ -44,3 +44,10 @@ test_match() {
   assert_matches "Hello World" "Hello"
   assert_not_matches "Hello World" "Hello$RANDOM"
 }
+
+test_regex_matches() {
+  assert_matches "/refs/heads/sample" "/refs/heads/*"
+  assert_matches "hello world" "hello w+"
+  assert_not_matches "hello world" "hello W+"
+  assert_not_matches "Hello World" "Hello$RANDOM"
+}

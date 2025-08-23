@@ -197,7 +197,7 @@ assert_path_exists() {
   local path="$1"
   local message="${2:-}"
 
-  if ! stat "$path" >/dev/null; then
+  if ! test -e "$path"; then
     failed
     log_error "Assertion failed${message:+: $message} - Path does not exist: $path"
     return 1
@@ -211,7 +211,7 @@ assert_path_not_exists() {
   local path="$1"
   local message="${2:-}"
 
-  if stat "$path" >/dev/null; then
+  if test -e "$path"; then
     failed
     log_error "Assertion failed${message:+: $message} - Path exists: $path"
     return 1
