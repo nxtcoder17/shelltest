@@ -3,7 +3,11 @@
 set -euo pipefail
 
 SHELLTEST_DIR=$(realpath $(dirname $0))
-TESTS_DIR=$(realpath $(dirname "${BASH_SOURCE[0]}"))
+NO_COLOR=false
+
+TESTS_FAILED=0
+TESTS_PASSED=0
+TOTAL_TESTS=0
 
 # Source logger
 source "$SHELLTEST_DIR/logger.sh"
@@ -14,6 +18,8 @@ run_test() {
   local test_name="$2"
 
   local test_dir=$(mktemp -d -t shelltest.XXXXXX)
+
+  _=$((TOTAL_TESTS++))
 
   log_test_started "$test_file" "$test_name"
 
@@ -33,7 +39,7 @@ passed() {
 # Setup assertions
 source "$SHELLTEST_DIR/assertions.sh"
 
-source "$TESTS_DIR/$test_file"
+source $(realpath "$test_file")
 
 # Run setup if defined
 if declare -f setup >/dev/null; then
@@ -53,10 +59,12 @@ exit \$ASSERTIONS_FAILED
 EOTEST
 
   if bash "$test_dir/test.sh"; then
+    _=$((TESTS_PASSED++))
     log_test_passed "$test_file" "$test_name"
     return 0
   else
     # echo -e "${RED}✗${RESET}"
+    _=$((TESTS_FAILED++))
     log_test_failed "$test_file" "$test_name"
     cat "$test_dir/stderr"
     return 1
@@ -77,12 +85,35 @@ run_test_file() {
   done <<<"$results"
 }
 
+print_summary() {
+  echo -e "\n${BOLD}Test Summary${RESET}"
+  echo -e "────────────────────────────"
+
+  local status_color=$GREEN
+  local status_text="PASSED"
+
+  if [[ $TESTS_FAILED -gt 0 ]]; then
+    status_color=$RED
+    status_text="FAILED"
+  fi
+
+  echo -e "Status: ${status_color}${BOLD}$status_text${RESET}"
+  echo -e "Tests run: $TOTAL_TESTS"
+  echo -e "Tests passed: ${GREEN}$TESTS_PASSED${RESET}"
+  echo -e "Tests failed: ${RED}$TESTS_FAILED${RESET}"
+
+  if [[ $TESTS_FAILED -gt 0 ]]; then
+    exit 1
+  fi
+}
+
 run_all_tests() {
+  dir="${1:-.}"
   all_test_files=""
   if command fd >/dev/null 2>&1; then
-    all_test_files=$(fd -t f _test.sh)
+    all_test_files=$(fd -t f _test.sh "$dir")
   else
-    all_test_files=$(find . -type f -name "*_test.sh")
+    all_test_files=$(find "$dir" -type f -name "*_test.sh")
   fi
 
   while IFS= read -r line; do
@@ -90,4 +121,78 @@ run_all_tests() {
   done <<<"$all_test_files"
 }
 
-run_all_tests
+cli() {
+  local test_files=()
+  local verbose=false
+  local quiet=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -h | --help)
+      print_usage
+      exit 0
+      ;;
+    -v | --version)
+      echo "shelltest version $SHELLTEST_VERSION"
+      exit 0
+      ;;
+    -V | --verbose)
+      verbose=true
+      shift
+      ;;
+    -q | --quiet)
+      quiet=true
+      shift
+      ;;
+    --no-color)
+      NO_COLOR=true
+      shift
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      print_usage
+      exit 1
+      ;;
+    *)
+      test_files+=("$1")
+      shift
+      ;;
+    esac
+  done
+
+  # If no files specified, look for test_*.sh in current directory
+  if [[ ${#test_files[@]} -eq 0 ]]; then
+    mapfile -t test_files < <(find . -maxdepth 1 -name 'test_*.sh' -type f | sort)
+  fi
+
+  if [[ ${#test_files[@]} -eq 0 ]]; then
+    log_error "No Test files found, matching test_*.sh"
+    exit 0
+  fi
+
+  # Run tests
+  for file in "${test_files[@]}"; do
+
+    if [ -d "$file" ]; then
+      run_all_tests "$file"
+      break
+    fi
+
+    # Check if specific test is requested (file::test_name format)
+    if [[ "$file" == *"::"* ]]; then
+      local test_file="${file%%::*}"
+      local test_name="${file##*::}"
+      run_test_file "$test_file" "$test_name"
+    else
+      run_test_file "$file"
+    fi
+  done
+
+  # Print summary
+  print_summary
+}
+
+# run_all_tests
+
+cli "$@"
